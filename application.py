@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for
 from pptx import Presentation  # 필요한 라이브러리 import
 from pptx.util import Inches  # 사진, 표 등을 그리기 위해
+
+import os
 import database
 
 import sys
@@ -44,6 +46,8 @@ def list():
     return render_template("list.html", house_list=house_list, length=length)
 
 # house의 세부내용 보는 함수
+
+
 @application.route("/house_info/<int:index>/")
 def house_info(index):
     house_info = database.load_house(index)
@@ -59,6 +63,15 @@ def house_info(index):
 # -------------------------------------------------------------------------------------------------------------------------------
 
 
+@application.route("/addSlide")
+def add_slide():
+    print("addSlide도착")
+    prs = Presentation("static/yescnc_ppt_example.pptx")
+    prs.slides.add_slide(prs.slide_layouts[2])  # 빈 슬라이드 추가
+    prs.save("static/yescnc_ppt_example.pptx")
+    return redirect(url_for("main"))
+
+
 @application.route("/main")
 def main():
     prs = Presentation("static/yescnc_ppt_example.pptx")
@@ -68,7 +81,7 @@ def main():
 
 
 @application.route("/editSlide", methods=["POST"])
-def editSlide():
+def edit_slide():
     # 프레젠테이션 객체 생성
     prs = Presentation("static/yescnc_ppt_example.pptx")
 
@@ -184,23 +197,70 @@ def editSlide():
                     shape.text_frame.text = content
                     print("바꾼 결과:"+(shape.text_frame.text))
 
-        if master.slide_layouts[2] == slide.slide_layout:  # 빈 슬라이드라면
+        if master.slide_layouts[2] == slide.slide_layout:  # 사진 슬라이드라면
             print(slide.slide_layout.name)
             print("2번째 슬라이드 맞음")
 
-            # 마지막장에 도달했을 경우
-            if slide_index == len(prs.slides)-1:
-                uploaded_files = request.file.files["photo_file"]
-                uploaded_files.save("static/img/{}.jpeg".format(
-                    request.form.get("pthoto_file"+str(slide_index+1))))
-                img_path = "static/img/{}.jpeg".format(
-                    request.form.get("pthoto_file"+str(slide_index+1)))
-                pic_slide = prs.slides.add_slide(prs.slide_layouts[2])
+            # 슬라이드 안에 있는 모양들 반복문 돌기
+            for shape_index, shape in enumerate(slide.shapes):
+
+                # 현재 모양 확인
+                print("shape의 이름: "+(shape.name))
+
+                # 모든 모양에 텍스트 프레임이 있는 것은 아니니깐 texxt프레임 있는지 확인
+                if not shape.has_text_frame:
+                    continue
+
+                print("shape_index는 "+str(shape_index))
+
+                if shape.name == "제목 3":  # 제목이라면
+
+                    print("shape의 text: "+(shape.text_frame.text))
+                    title = request.form.get("title"+str(slide_index+1))
+                    print(title)
+
+                    # 현재 텍스트 내용 지우기
+                    shape.text_frame.clear()
+                    print("!!textframe 클리어!!")
+
+                    # 텍스트 내용 바꾸기
+                    shape.text_frame.text = title
+                    print("바꾼 결과:"+(shape.text_frame.text))
+                if shape.name == "내용 개체 틀 4":
+                    print("shape의 text: "+(shape.text_frame.text))
+                    photo_content = request.form.get(
+                        "photo_content"+str(slide_index+1))
+                    print(photo_content)
+
+                    # 현재 텍스트 내용 지우기
+                    shape.text_frame.clear()
+                    print("!!textframe 클리어!!")
+
+                    # 텍스트 내용 바꾸기
+                    shape.text_frame.text = photo_content
+                    print("바꾼 결과:"+(shape.text_frame.text))
+
+            # 만약 파일이 존재한다면
+            file = ("photo_file"+str(slide_index+1))
+            if request.files[file] is not None:
+                print("사진이 존재합니다.")
+                file_name = request.files[file].filename
+                print("file_name은" + file_name)
+                # extends_index = file.find(".")
+                # file_name = file_name[:extends_index]
+                # print(file_name)
+                # print(request.files[file])
+
+                uploaded_files = request.files[file]
+
+                # 가져온 파일 저장
+                uploaded_files.save("static/img/{}.jpeg".format(file_name))
+                img_path = "static/img/{}.jpeg".format(file_name)
                 left = top = Inches(1)
                 width = height = Inches(1)
                 # width, hegith가 없을 경우 원본 사이즈로
-                pic_slide.shapes.add_picture(img_path, left, top, width=width,
-                                             height=height)
+                slide.shapes.add_picture(
+                    img_path, left, top, width=width, height=height)
     prs.save("static/new_ppt.pptx")
     return redirect(url_for("hello"))
 
